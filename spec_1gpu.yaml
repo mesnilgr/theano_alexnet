@@ -6,5 +6,5 @@ sock_data: 5001
 batch_size: 256 # def: 256
 
 # Directories
-train_folder: /scratch/ilsvrc12/train_hkl_b256_b_256/
-val_folder: /scratch/ilsvrc12/val_hkl_b256_b_256/
+train_folder: /mnt/bigdisk/data/datasets/gender-375k/train/ #/scratch/ilsvrc12/train_hkl_b256_b_256/
+val_folder: /mnt/bigdisk/data/datasets/gender-375k/valid/ #/scratch/ilsvrc12/val_hkl_b256_b_256/

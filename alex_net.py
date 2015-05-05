@@ -32,7 +32,7 @@ class AlexNet(object):
         weight_types = []
 
         if flag_datalayer:
-            data_layer = DataLayer(input=x, image_shape=(3, 256, 256,
+            data_layer = DataLayer(input=x, image_shape=(3, 255, 255,
                                                          batch_size),
                                    cropsize=227, rand=rand, mirror=True,
                                    flag_rand=config['rand_crop'])
@@ -118,7 +118,7 @@ class AlexNet(object):
         dropout_layer7 = DropoutLayer(fc_layer7.output, n_in=4096, n_out=4096)
 
         softmax_layer8 = SoftmaxLayer(
-            input=dropout_layer7.output, n_in=4096, n_out=1000)
+            input=dropout_layer7.output, n_in=4096, n_out=2)
         self.layers.append(softmax_layer8)
         params += softmax_layer8.params
         weight_types += softmax_layer8.weight_type

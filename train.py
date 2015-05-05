@@ -14,6 +14,7 @@ from train_funcs import (unpack_configs, adjust_learning_rate,
                          get_val_error_loss, get_rand3d, train_model_wrap,
                          proc_configs)
 
+import ipdb
 
 def train_net(config):
 
@@ -55,7 +56,6 @@ def train_net(config):
     (train_model, validate_model, train_error, learning_rate,
         shared_x, shared_y, rand_arr, vels) = compile_models(model, config)
 
-
     ######################### TRAIN MODEL ################################
 
     print '... training'
@@ -71,8 +71,6 @@ def train_net(config):
 
     n_train_batches = len(train_filenames)
     minibatch_range = range(n_train_batches)
-
-
 
     # Start Training Loop
     epoch = 0
@@ -106,7 +104,6 @@ def train_net(config):
 
         count = 0
         for minibatch_index in minibatch_range:
-
             num_iter = (epoch - 1) * n_train_batches + count
             count = count + 1
             if count == 1:
@@ -133,13 +130,12 @@ def train_net(config):
 
             if flag_para_load and (count < len(minibatch_range)):
                 load_send_queue.put('calc_finished')
-
         ############### Test on Validation Set ##################
 
         DropoutLayer.SetDropoutOff()
 
         this_validation_error, this_validation_loss = get_val_error_loss(
-            rand_arr, shared_x, shared_y,
+            rand_arr, shared_x, shared_y, img_mean,
             val_filenames, val_labels,
             flag_datalayer, flag_para_load,
             batch_size, validate_model,

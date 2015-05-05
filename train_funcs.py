@@ -4,7 +4,8 @@ import os
 
 import numpy as np
 
-import hickle as hkl
+import pickle
+#import hickle as hkl
 
 
 def proc_configs(config):
@@ -15,7 +16,7 @@ def proc_configs(config):
     return config
 
 
-def unpack_configs(config, ext_data='.hkl', ext_label='.npy'):
+def unpack_configs(config, ext_data='.pkl', ext_label='.npy'):
     flag_para_load = config['para_load']
     flag_datalayer = config['use_data_layer']
 
@@ -25,8 +26,9 @@ def unpack_configs(config, ext_data='.hkl', ext_label='.npy'):
     label_folder = config['label_folder']
     train_filenames = sorted(glob.glob(train_folder + '/*' + ext_data))
     val_filenames = sorted(glob.glob(val_folder + '/*' + ext_data))
+    labels = range(2)
     train_labels = np.load(label_folder + 'train_labels' + ext_label)
-    val_labels = np.load(label_folder + 'val_labels' + ext_label)
+    val_labels = np.load(label_folder + 'valid_labels' + ext_label)
     img_mean = np.load(config['mean_file'])
     img_mean = img_mean[:, :, :, np.newaxis].astype('float32')
     return (flag_para_load, flag_datalayer,
@@ -57,7 +59,7 @@ def adjust_learning_rate(config, epoch, step_idx, val_record, learning_rate):
     return step_idx
 
 
-def get_val_error_loss(rand_arr, shared_x, shared_y,
+def get_val_error_loss(rand_arr, shared_x, shared_y, img_mean,
                        val_filenames, val_labels,
                        flag_datalayer, flag_para_load,
                        batch_size, validate_model,
@@ -97,7 +99,8 @@ def get_val_error_loss(rand_arr, shared_x, shared_y,
                 if not flag_datalayer:
                     send_queue.put(np.float32([0.5, 0.5, 0]))
         else:
-            val_img = hkl.load(str(val_filenames[val_index]))
+            val_img = pickle.load(open(str(val_filenames[val_index]))) - img_mean
+            #val_img = hkl.load(str(val_filenames[val_index]))
             shared_x.set_value(val_img)
 
         shared_y.set_value(val_labels[val_index * batch_size:
@@ -157,7 +160,9 @@ def train_model_wrap(train_model, shared_x, shared_y, rand_arr, img_mean,
                 send_queue.put(get_rand3d())
 
     else:
-        batch_img = hkl.load(str(train_filenames[minibatch_index])) - img_mean
+        #batch_img = np.random.normal(0, 1, (3, 227, 227, 256)).astype(np.float32) 
+        #batch_img = hkl.load(str(train_filenames[minibatch_index])) - img_mean
+        batch_img = pickle.load(open(str(train_filenames[minibatch_index]))) - img_mean
         shared_x.set_value(batch_img)
 
     batch_label = train_labels[minibatch_index * batch_size:

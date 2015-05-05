@@ -12,7 +12,7 @@ lr_adapt_threshold: 0.01
 lr_step: [20, 40]  # def: 20, learning rate will be reduced by 10 times at these steps
 
 # Data
-use_data_layer: False
+use_data_layer: True
 rand_crop: True # def: True
 shuffle: False # def: False, if shuffle the batches
 para_load: True
@@ -27,8 +27,8 @@ momentum: 0.9 # def: 0.9
 weight_decay: 0.0005 # def: 0.0005
 
 # Directories
-label_folder: /scratch/ilsvrc12/labels/
-mean_file: /scratch/ilsvrc12/misc/img_mean.npy
+label_folder: /mnt/bigdisk/data/datasets/gender-375k/labels/ #/scratch/ilsvrc12/labels/
+mean_file: /mnt/bigdisk/data/datasets/gender-375k/train/image_mean.npy
 weights_dir: ./models/  # directory for saving weights and results
 
 # conv library
