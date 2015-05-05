@@ -47,34 +47,3 @@ if __name__ == "__main__":
             print "[evaluation] split valid %i/%i in %.2f sec\r" % (i + 1, n_valid_batches, toc - tic),
             sys.stdout.flush()
         print '\n\t ** epoch %i, valid %.3f\n' % (epoch, np.mean(valid_acc))
-
-    if False:
-        for i, batch in enumerate(load_csv_batch('train.csv')):
-            X = vectorizer.transform(batch_X(batch))
-            gender_y, type_y = batch_y(batch)
-
-            gender_model.partial_fit(X, gender_y, classes=["M", "F"])
-
-            #print 'batch %d (%d)' % (i + 1, (i + 1) * BATCH_SIZE)
-
-        if False:
-            train_acc = []
-            for i, batch in enumerate(load_csv_batch('train.csv')):
-                X = vectorizer.transform(batch_X(batch))
-                gender_y, type_y = batch_y(batch)
-                #pdb.set_trace()
-                train_acc += [gender_model.score(X, gender_y)]
-            print 'epoch %i, gender train %.3f' % (epoch, np.mean(train_acc))
-
-        validation = load_csv('valid.csv')
-        X = vectorizer.transform(batch_X(validation))
-        gender_y, type_y = batch_y(validation)
-
-        print 'epoch %i, gender validation %.3f' % (epoch, gender_model.score(X, gender_y))
-
-        validation = load_csv('valid-balanced.csv')
-        X = vectorizer.transform(batch_X(validation))
-        gender_y, type_y = batch_y(validation)
-
-        print 'epoch %i, gender validation (balanced) %.3f' % (epoch, gender_model.score(X, gender_y))
-
