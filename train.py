@@ -175,11 +175,6 @@ if __name__ == '__main__':
         
     config = proc_configs(config)
 
-
-
-
-
-
     if config['para_load']:
         from proc_load import fun_load
         config['queue_l2t'] = Queue(1)
@@ -191,7 +186,6 @@ if __name__ == '__main__':
         load_proc.start()
         train_proc.join()
         load_proc.join()
-
     else:
         train_proc = Process(target=train_net, args=(config,))
         train_proc.start()

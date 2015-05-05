@@ -5,8 +5,7 @@ import os
 import numpy as np
 
 import pickle
-#import hickle as hkl
-
+import hickle as hkl
 
 def proc_configs(config):
     if not os.path.exists(config['weights_dir']):
@@ -14,7 +13,6 @@ def proc_configs(config):
         print "Creat folder: " + config['weights_dir']
 
     return config
-
 
 def unpack_configs(config, ext_data='.pkl', ext_label='.npy'):
     flag_para_load = config['para_load']
@@ -33,10 +31,6 @@ def unpack_configs(config, ext_data='.pkl', ext_label='.npy'):
     img_mean = img_mean[:, :, :, np.newaxis].astype('float32')
     return (flag_para_load, flag_datalayer,
             train_filenames, val_filenames, train_labels, val_labels, img_mean)
-
-
-
-
 
 def adjust_learning_rate(config, epoch, step_idx, val_record, learning_rate):
     # Adapt Learning Rate
@@ -57,7 +51,6 @@ def adjust_learning_rate(config, epoch, step_idx, val_record, learning_rate):
             print 'Learning rate changed to::', learning_rate.get_value()
 
     return step_idx
-
 
 def get_val_error_loss(rand_arr, shared_x, shared_y, img_mean,
                        val_filenames, val_labels,
@@ -132,12 +125,10 @@ def get_val_error_loss(rand_arr, shared_x, shared_y, img_mean,
     else:
         return this_validation_error, this_validation_loss
 
-
 def get_rand3d():
     tmp_rand = np.float32(np.random.rand(3))
     tmp_rand[2] = round(tmp_rand[2])
     return tmp_rand
-
 
 def train_model_wrap(train_model, shared_x, shared_y, rand_arr, img_mean,
                      count, minibatch_index, minibatch_range, batch_size,
