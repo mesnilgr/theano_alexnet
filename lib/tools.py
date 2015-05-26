@@ -4,6 +4,7 @@ import numpy as np
 
 
 def save_weights(layers, weights_dir, epoch):
+    print "saving..."
     for idx in range(len(layers)):
         if hasattr(layers[idx], 'W'):
             layers[idx].W.save_weight(
@@ -27,6 +28,7 @@ def save_weights(layers, weights_dir, epoch):
 
 
 def load_weights(layers, weights_dir, epoch):
+    print "loading..."
     for idx in range(len(layers)):
         if hasattr(layers[idx], 'W'):
             layers[idx].W.load_weight(

@@ -14,7 +14,7 @@ class AlexNet(object):
     def __init__(self, config):
 
         self.config = config
-
+        self.rng = config["rng"]
         batch_size = config['batch_size']
         flag_datalayer = config['use_data_layer']
         lib_conv = config['lib_conv']
@@ -48,6 +48,7 @@ class AlexNet(object):
                                         poolsize=3, poolstride=2, 
                                         bias_init=0.0, lrn=True,
                                         lib_conv=lib_conv,
+                                        rng=self.rng
                                         )
         self.layers.append(convpool_layer1)
         params += convpool_layer1.params
@@ -60,6 +61,7 @@ class AlexNet(object):
                                         poolsize=3, poolstride=2, 
                                         bias_init=0.1, lrn=True,
                                         lib_conv=lib_conv,
+                                        rng=self.rng
                                         )
         self.layers.append(convpool_layer2)
         params += convpool_layer2.params
@@ -72,7 +74,9 @@ class AlexNet(object):
                                         poolsize=1, poolstride=0, 
                                         bias_init=0.0, lrn=False,
                                         lib_conv=lib_conv,
+                                        rng=self.rng
                                         )
+
         self.layers.append(convpool_layer3)
         params += convpool_layer3.params
         weight_types += convpool_layer3.weight_type
@@ -84,6 +88,7 @@ class AlexNet(object):
                                         poolsize=1, poolstride=0, 
                                         bias_init=0.1, lrn=False,
                                         lib_conv=lib_conv,
+                                        rng=self.rng
                                         )
         self.layers.append(convpool_layer4)
         params += convpool_layer4.params
@@ -96,6 +101,7 @@ class AlexNet(object):
                                         poolsize=3, poolstride=2, 
                                         bias_init=0.0, lrn=False,
                                         lib_conv=lib_conv,
+                                        rng=self.rng
                                         )
         self.layers.append(convpool_layer5)
         params += convpool_layer5.params
@@ -103,28 +109,33 @@ class AlexNet(object):
 
         fc_layer6_input = T.flatten(
             convpool_layer5.output.dimshuffle(3, 0, 1, 2), 2)
-        fc_layer6 = FCLayer(input=fc_layer6_input, n_in=9216, n_out=4096)
+        fc_layer6 = FCLayer(input=fc_layer6_input, n_in=9216, n_out=4096, rng=self.rng)
         self.layers.append(fc_layer6)
         params += fc_layer6.params
         weight_types += fc_layer6.weight_type
 
         dropout_layer6 = DropoutLayer(fc_layer6.output, n_in=4096, n_out=4096)
+        #self.layers.append(dropout_layer6)
 
-        fc_layer7 = FCLayer(input=dropout_layer6.output, n_in=4096, n_out=4096)
+        fc_layer7 = FCLayer(input=dropout_layer6.output, n_in=4096, n_out=4096, rng=self.rng)
+        #fc_layer7 = FCLayer(input=fc_layer6.output, n_in=4096, n_out=4096, rng=self.rng)
         self.layers.append(fc_layer7)
         params += fc_layer7.params
         weight_types += fc_layer7.weight_type
 
         dropout_layer7 = DropoutLayer(fc_layer7.output, n_in=4096, n_out=4096)
+        #self.layers.append(dropout_layer7)
 
         softmax_layer8 = SoftmaxLayer(
-            input=dropout_layer7.output, n_in=4096, n_out=2)
+            input=dropout_layer7.output, n_in=4096, n_out=2, rng=self.rng)
+            #input=fc_layer7.output, n_in=4096, n_out=2, rng=self.rng)
         self.layers.append(softmax_layer8)
         params += softmax_layer8.params
         weight_types += softmax_layer8.weight_type
 
         # #################### NETWORK BUILT #######################
 
+        self.proba = softmax_layer8.p_y_given_x
         self.cost = softmax_layer8.negative_log_likelihood(y)
         self.errors = softmax_layer8.errors(y)
         self.errors_top_5 = softmax_layer8.errors_top_x(y, 5)
@@ -134,7 +145,7 @@ class AlexNet(object):
         self.rand = rand
         self.weight_types = weight_types
         self.batch_size = batch_size
-
+        self.outputs = [layer.output for layer in self.layers]
 
 def compile_models(model, config, flag_top_5=False):
 
@@ -148,6 +159,7 @@ def compile_models(model, config, flag_top_5=False):
     errors = model.errors
     errors_top_5 = model.errors_top_5
     batch_size = model.batch_size
+    proba = model.proba
 
     mu = config['momentum']
     eta = config['weight_decay']
@@ -218,6 +230,7 @@ def compile_models(model, config, flag_top_5=False):
                                           (lr, learning_rate),
                                           (rand, rand_arr)])
 
+    #validate_outputs = [cost, errors, proba]
     validate_outputs = [cost, errors]
     if flag_top_5:
         validate_outputs.append(errors_top_5)

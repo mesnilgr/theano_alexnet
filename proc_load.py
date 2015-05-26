@@ -9,7 +9,7 @@ import numpy as np
 import zmq
 import pycuda.driver as drv
 import pycuda.gpuarray as gpuarray
-#import hickle as hkl
+import hickle as hkl
 import pickle
 
 
@@ -119,7 +119,8 @@ def fun_load(config, sock_data=5000):
         hkl_name = recv_queue.get()
 
         # print hkl_name
-        data = pickle.load(open(hkl_name)) - img_mean
+        #data = pickle.load(open(hkl_name)) - img_mean
+        data = hkl.load(hkl_name) - img_mean
         # print 'load ', time.time() - bgn_time
         if flag_randproc:
             param_rand = recv_queue.get()

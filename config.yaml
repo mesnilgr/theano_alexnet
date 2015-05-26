@@ -1,8 +1,8 @@
 # If want to input None, use !!null
 
 # Resume Training, start from scratch or resume training
-resume_train: False
-load_epoch: 20
+resume_train: True
+load_epoch: 19
 
 # Learning Parameters
 n_epochs: 60
@@ -15,7 +15,7 @@ lr_step: [20, 40]  # def: 20, learning rate will be reduced by 10 times at these
 use_data_layer: True
 rand_crop: True # def: True
 shuffle: False # def: False, if shuffle the batches
-para_load: True
+para_load: False
 batch_crop_mirror: False  # if False, do randomly on each image separately
 
 # Momentum
@@ -27,8 +27,8 @@ momentum: 0.9 # def: 0.9
 weight_decay: 0.0005 # def: 0.0005
 
 # Directories
-label_folder: /mnt/bigdisk/data/datasets/gender-375k/labels/ #/scratch/ilsvrc12/labels/
-mean_file: /mnt/bigdisk/data/datasets/gender-375k/train/image_mean.npy
+label_folder: /mnt/bigdisk/data/datasets/gender-1M/labels/ #/scratch/ilsvrc12/labels/
+mean_file: /mnt/bigdisk/data/datasets/gender-1M/train/image_mean.npy
 weights_dir: ./models/  # directory for saving weights and results
 
 # conv library

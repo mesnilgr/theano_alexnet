@@ -1,0 +1,64 @@
+(lp1
+VM-|-A-|-underwear-|-boxers
+p2
+aVM-|-A-|-sweats-|-sweatshirts
+p3
+aVM-|-A-|-t-shirts-|-short sleeve t-shirts
+p4
+aVM-|-A-|-pants-|-formal pants
+p5
+aVM-|-A-|-knitwear-|-cardigans
+p6
+aVM-|-A-|-jeans-|-straight jeans
+p7
+aVM-|-A-|-jackets-|-leather jackets
+p8
+aVM-|-A-|-shorts-|-casual shorts
+p9
+aVM-|-A-|-jackets-|-formal jackets
+p10
+aVM-|-A-|-sweats-|-sweatpants
+p11
+aVM-|-A-|-jackets-|-parka jackets
+p12
+aVM-|-A-|-shirts-|-casual shirts
+p13
+aVM-|-A-|-jeans-|-slim jeans
+p14
+aVM-|-A-|-jackets-|-waistcoats
+p15
+aVM-|-A-|-shorts-|-bermuda shorts
+p16
+aVM-|-A-|-beachwear-|-trunks
+p17
+aVM-|-S-|-sneakers-|-hi-top sneakers
+p18
+aVM-|-A-|-jackets-|-casual jackets
+p19
+aVM-|-A-|-knitwear-|-v neck
+p20
+aVM-|-A-|-pants-|-casual pants
+p21
+aVM-|-A-|-knitwear-|-crew neck
+p22
+aVM-|-A-|-shirts-|-formal shirts
+p23
+aVM-|-A-|-sweats-|-hoodies
+p24
+aVM-|-A-|-t-shirts-|-polo shirts
+p25
+aVM-|-A-|-t-shirts-|-long sleeve t-shirts
+p26
+aVM-|-S-|-sneakers-|-low-top sneakers
+p27
+aVM-|-A-|-suits-|-2 piece suits
+p28
+aVM-|-A-|-jeans-|-skinny jeans
+p29
+aVM-|-A-|-dresses-|-mini dresses
+p30
+aVM-|-A-|-t-shirts-|-sleeveless t-shirts
+p31
+aVM-|-S-|-slip-ons-|-loafers
+p32
+a.

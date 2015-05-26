@@ -8,6 +8,8 @@ from theano.sandbox.cuda.basic_ops import gpu_contiguous
 from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
 from pylearn2.sandbox.cuda_convnet.pool import MaxPool
 from pylearn2.expr.normalize import CrossChannelNormalization
+from theano.tensor.nnet import conv
+from theano.tensor.signal import downsample
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -15,11 +17,21 @@ warnings.filterwarnings("ignore")
 rng = np.random.RandomState(23455)
 # set a fixed number for 2 purpose:
 #  1. repeatable experiments; 2. for multiple-GPU, the same initial weights
+import pdb
 
+def padd(padsize, input):
+    # input bc01
+    zeros_top = T.zeros((input.shape[0], input.shape[1],
+                         padsize, input.shape[2]))
+    input = T.concatenate([zeros_top, input, zeros_top], axis=2)
+    zeros_left = T.zeros((input.shape[0], input.shape[1],
+                         input.shape[3] + 2 * padsize, padsize))
+    input = T.concatenate([zeros_left, input, zeros_left], axis=3)
+    return input
 
 class Weight(object):
 
-    def __init__(self, w_shape, mean=0, std=0.01):
+    def __init__(self, w_shape, rng=rng, mean=0, std=0.01):
         super(Weight, self).__init__()
         if std != 0:
             self.np_values = np.asarray(
@@ -31,11 +43,11 @@ class Weight(object):
         self.val = theano.shared(value=self.np_values)
 
     def save_weight(self, dir, name):
-        print 'weight saved: ' + name
+        #print 'weight saved: ' + name
         np.save(dir + name + '.npy', self.val.get_value())
 
     def load_weight(self, dir, name):
-        print 'weight loaded: ' + name
+        #print 'weight loaded: ' + name
         self.np_values = np.load(dir + name + '.npy')
         self.val.set_value(self.np_values)
 
@@ -75,7 +87,7 @@ class ConvPoolLayer(object):
 
     def __init__(self, input, image_shape, filter_shape, convstride, padsize,
                  group, poolsize, poolstride, bias_init, lrn=False,
-                 lib_conv='cudnn',
+                 lib_conv='cudnn', rng=rng
                  ):
         '''
         lib_conv can be cudnn (recommended)or cudaconvnet
@@ -87,8 +99,10 @@ class ConvPoolLayer(object):
         self.poolsize = poolsize
         self.poolstride = poolstride
         self.channel = image_shape[0]
+        self.batch_size = image_shape[3]
         self.lrn = lrn
         self.lib_conv = lib_conv
+        self.group = group
         assert group in [1, 2]
 
         self.filter_shape = np.asarray(filter_shape)
@@ -98,17 +112,17 @@ class ConvPoolLayer(object):
             self.lrn_func = CrossChannelNormalization()
 
         if group == 1:
-            self.W = Weight(self.filter_shape)
-            self.b = Weight(self.filter_shape[3], bias_init, std=0)
+            self.W = Weight(self.filter_shape, rng)
+            self.b = Weight(self.filter_shape[3], rng, bias_init, std=0)
         else:
             self.filter_shape[0] = self.filter_shape[0] / 2
             self.filter_shape[3] = self.filter_shape[3] / 2
             self.image_shape[0] = self.image_shape[0] / 2
             self.image_shape[3] = self.image_shape[3] / 2
-            self.W0 = Weight(self.filter_shape)
-            self.W1 = Weight(self.filter_shape)
-            self.b0 = Weight(self.filter_shape[3], bias_init, std=0)
-            self.b1 = Weight(self.filter_shape[3], bias_init, std=0)
+            self.W0 = Weight(self.filter_shape, rng)
+            self.W1 = Weight(self.filter_shape, rng)
+            self.b0 = Weight(self.filter_shape[3], rng, bias_init, std=0)
+            self.b1 = Weight(self.filter_shape[3], rng, bias_init, std=0)
 
         if lib_conv == 'cudaconvnet':
             self.conv_op = FilterActs(pad=self.padsize, stride=self.convstride,
@@ -119,6 +133,7 @@ class ConvPoolLayer(object):
                 contiguous_input = gpu_contiguous(input)
                 contiguous_filters = gpu_contiguous(self.W.val)
                 conv_out = self.conv_op(contiguous_input, contiguous_filters)
+                self.conv_out = conv_out
                 conv_out = conv_out + self.b.val.dimshuffle(0, 'x', 'x', 'x')
             else:
                 contiguous_input0 = gpu_contiguous(
@@ -148,11 +163,7 @@ class ConvPoolLayer(object):
                 self.output = self.pool_op(self.output)
 
         elif lib_conv == 'cudnn':
-
             input_shuffled = input.dimshuffle(3, 0, 1, 2)  # c01b to bc01
-            # in01out to outin01
-            # print image_shape_shuffled
-            # print filter_shape_shuffled
             if group == 1:
                 W_shuffled = self.W.val.dimshuffle(3, 0, 1, 2)  # c01b to bc01
                 conv_out = dnn.dnn_conv(img=input_shuffled,
@@ -161,6 +172,7 @@ class ConvPoolLayer(object):
                                         border_mode=padsize,
                                         )
                 conv_out = conv_out + self.b.val.dimshuffle('x', 0, 'x', 'x')
+                self.conv_out = conv_out
             else:
                 W0_shuffled = \
                     self.W0.val.dimshuffle(3, 0, 1, 2)  # c01b to bc01
@@ -185,6 +197,7 @@ class ConvPoolLayer(object):
                 conv_out1 = conv_out1 + \
                     self.b1.val.dimshuffle('x', 0, 'x', 'x')
                 conv_out = T.concatenate([conv_out0, conv_out1], axis=1)
+                self.conv_out = conv_out
 
             # ReLu
             self.output = T.maximum(conv_out, 0)
@@ -197,6 +210,56 @@ class ConvPoolLayer(object):
 
             self.output = self.output.dimshuffle(1, 2, 3, 0)  # bc01 to c01b
 
+        elif lib_conv == "cpu":
+            input_shuffled = input.dimshuffle(3, 0, 1, 2)  # c01b to bc01
+          
+            if group == 1:
+                if padsize > 0:
+                    input_shuffled = padd(padsize, input_shuffled)
+                    #self.conv_out = input_padded
+                
+                W_shuffled = self.W.val.dimshuffle(3, 0, 1, 2)  # c01b to bc01
+                conv_out = conv.conv2d(input_shuffled, W_shuffled,
+                                       subsample=(convstride, convstride))
+                conv_out = conv_out + self.b.val.dimshuffle('x', 0, 'x', 'x')
+                self.conv_out = conv_out# [input_shuffled, input_padded]
+            else:
+                input0 = input_shuffled[:, :self.channel / 2,:, :] 
+                if padsize > 0:
+                    input0 = padd(padsize, input0)
+ 
+                W0_shuffled = \
+                    self.W0.val.dimshuffle(3, 0, 1, 2)  # c01b to bc01
+                conv_out0 = conv.conv2d(input0, W0_shuffled, subsample=(convstride, convstride))
+                conv_out0 = conv_out0 + self.b0.val.dimshuffle('x', 0, 'x', 'x')
+
+                input1 = input_shuffled[:, self.channel / 2:,:, :]
+                if padsize > 0:
+                    input1 = padd(padsize, input1)
+ 
+                W1_shuffled = \
+                    self.W1.val.dimshuffle(3, 0, 1, 2)  # c01b to bc01
+                conv_out1 = conv.conv2d(input1, W1_shuffled, subsample=(convstride, convstride))
+                conv_out1 = conv_out1 + \
+                    self.b1.val.dimshuffle('x', 0, 'x', 'x')
+
+                conv_out = T.concatenate([conv_out0, conv_out1], axis=1)
+                self.conv_out = conv_out
+
+            self.output = T.maximum(conv_out, 0)
+            
+            if poolstride == 0:
+                poolstride = None 
+            else:
+                poolstride = (poolstride, poolstride)
+            self.output = downsample.max_pool_2d(
+                        input=self.output,
+                        ds=(poolsize, poolsize),
+                        st=poolstride,
+                        ignore_border=True
+                    )
+            
+            self.output = self.output.dimshuffle(1, 2, 3, 0)  # bc01 to c01b
         else:
             NotImplementedError("lib_conv can only be cudaconvnet or cudnn")
 
@@ -218,10 +281,10 @@ class ConvPoolLayer(object):
 
 class FCLayer(object):
 
-    def __init__(self, input, n_in, n_out):
+    def __init__(self, input, n_in, n_out, rng=rng):
 
-        self.W = Weight((n_in, n_out), std=0.005)
-        self.b = Weight(n_out, mean=0.1, std=0)
+        self.W = Weight((n_in, n_out), rng=rng, std=0.005)
+        self.b = Weight(n_out, rng=rng, mean=0.1, std=0)
         self.input = input
         lin_output = T.dot(self.input, self.W.val) + self.b.val
         self.output = T.maximum(lin_output, 0)
@@ -261,23 +324,25 @@ class DropoutLayer(object):
 
     @staticmethod
     def SetDropoutOff():
+        print "setting dropout off"
         for i in range(0, len(DropoutLayer.layers)):
+            print "layer %i" % i
             DropoutLayer.layers[i].flag_on.set_value(0.0)
 
 
 class SoftmaxLayer(object):
 
-    def __init__(self, input, n_in, n_out):
+    def __init__(self, input, n_in, n_out, rng=rng):
 
-        self.W = Weight((n_in, n_out))
-        self.b = Weight((n_out,), std=0)
+        self.W = Weight((n_in, n_out), rng=rng)
+        self.b = Weight((n_out,), rng=rng, std=0)
 
         self.p_y_given_x = T.nnet.softmax(
             T.dot(input, self.W.val) + self.b.val)
 
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
 
-
+        self.output = self.p_y_given_x
         self.params = [self.W.val, self.b.val]
         self.weight_type = ['W', 'b']
 
@@ -312,3 +377,120 @@ class SoftmaxLayer(object):
             return T.mean(T.min(T.neq(y_pred_top_x, y_top_x), axis=1))
         else:
             raise NotImplementedError()
+
+#if __name__ == "__main__":
+if False:
+    import theano.tensor as T
+    input = T.tensor4('input')
+    filters = T.tensor4('filters')
+
+    # conv op working on CPU
+    from theano.tensor.nnet import conv
+    out = conv.conv2d(input, filters, filter_shape=filter_shape,
+                      image_shape=image_shape)
+
+    from pylearn2.sandbox.cuda_convnet.filter_acts import FilterActs
+    from theano.sandbox.cuda.basic_ops import gpu_contiguous
+
+    conv_op = FilterActs()
+    contiguous_input = gpu_contiguous(input)
+    contiguous_filters = gpu_contiguous(filters)
+    out2 = conv_op(contiguous_input, contiguous_filters)
+
+    
+#if False:
+if __name__ == "__main__":
+    # test different 
+    batch_size = 256
+    
+    x = np.random.normal(0, 1, (3, 227, 227, batch_size)).astype(theano.config.floatX)
+    #x = np.random.normal(0, 1, (batch_size, 3, 4, 4)).astype(theano.config.floatX)
+    print "input shape:", x.shape
+    input = T.ftensor4('x')
+    
+    if False:
+        group = 1
+        rng = np.random.RandomState(23455)
+        layerA =          ConvPoolLayer(input=input,
+                                        image_shape=(3, 227, 227, batch_size), 
+                                        filter_shape=(3, 11, 11, 96), 
+                                        convstride=4, padsize=0, group=1, 
+                                        poolsize=3, poolstride=2, 
+                                        bias_init=0.0, lrn=True,
+                                        lib_conv="cudnn",
+                                        )
+
+        rng = np.random.RandomState(23455)
+        layerB =          ConvPoolLayer(input=input,
+                                        image_shape=(3, 227, 227, batch_size), 
+                                        filter_shape=(3, 11, 11, 96), 
+                                        convstride=4, padsize=0, group=1, 
+                                        poolsize=3, poolstride=2, 
+                                        bias_init=0.0, lrn=True,
+                                        lib_conv="cpu",
+                                        )
+
+    if True:
+        group = 2
+        convpool_layer1 = ConvPoolLayer(input=input,
+                                        image_shape=(3, 227, 227, batch_size), 
+                                        filter_shape=(3, 11, 11, 96), 
+                                        convstride=4, padsize=0, group=1, 
+                                        poolsize=3, poolstride=2, 
+                                        bias_init=0.0, lrn=True,
+                                        lib_conv="cpu",
+                                        )
+        convpool_layer2 = ConvPoolLayer(input=convpool_layer1.output,
+                                        image_shape=(96, 27, 27, batch_size),
+                                        filter_shape=(96, 5, 5, 256), 
+                                        convstride=1, padsize=2, group=group, 
+                                        poolsize=3, poolstride=2, 
+                                        bias_init=0.1, lrn=True,
+                                        lib_conv="cpu",
+                                        rng=rng
+                                        )
+
+        # 1st layer good: now checking group = 2 and padsize =! 0 
+        rng = np.random.RandomState(23455)
+        layerA =                  ConvPoolLayer(input=convpool_layer2.output,
+                                                image_shape=(256, 13, 13, batch_size),
+                                                filter_shape=(256, 3, 3, 384),
+                                                convstride=1, padsize=1, group=1,
+                                                poolsize=1, poolstride=0,
+                                                bias_init=0.0, lrn=False,
+                                                lib_conv="cpu",
+                                                rng=self.rng
+                                                )
+        rng = np.random.RandomState(23455)
+        layerB =                  ConvPoolLayer(input=convpool_layer2.output,
+                                                image_shape=(256, 13, 13, batch_size),
+                                                filter_shape=(256, 3, 3, 384),
+                                                convstride=1, padsize=1, group=1,
+                                                poolsize=1, poolstride=0,
+                                                bias_init=0.0, lrn=False,
+                                                lib_conv="cudnn",
+                                                rng=self.rng
+                                                )
+
+    if group == 1: 
+        assert ((layerA.W.val.get_value() - layerB.W.val.get_value())**2).sum() == 0
+        assert ((layerA.b.val.get_value() - layerB.b.val.get_value())**2).sum() == 0
+    else:
+        assert ((layerA.W0.val.get_value() - layerB.W0.val.get_value())**2).sum() == 0
+        assert ((layerA.W1.val.get_value() - layerB.W1.val.get_value())**2).sum() == 0
+        assert ((layerA.b0.val.get_value() - layerB.b0.val.get_value())**2).sum() == 0
+        assert ((layerA.b1.val.get_value() - layerB.b1.val.get_value())**2).sum() == 0
+ 
+
+    #diff = T.sum((layerA.conv_out - layerB.conv_out) ** 2)
+    f = theano.function(inputs=[input],
+                        #outputs=[layerA.output, layerB.output])
+                        #outputs=layerA.conv_out)
+                        outputs=[layerA.conv_out, layerB.conv_out])
+                        #outputs=[layerB.output])
+
+    pdb.set_trace()
+    print f(x)
+    z, y = f(x)
+    print ((z - y)**2).sum()
+

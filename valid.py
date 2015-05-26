@@ -11,8 +11,10 @@ sys.path.append('./lib')
 from tools import (save_weights, load_weights,
                    save_momentums, load_momentums)
 from train_funcs import (unpack_configs, adjust_learning_rate,
-                         get_val_error_loss, get_rand3d, train_model_wrap,
+                         get_val_error_pkl, get_rand3d, train_model_wrap,
                          proc_configs)
+
+import ipdb
 
 def train_net(config):
 
@@ -54,9 +56,6 @@ def train_net(config):
     (train_model, validate_model, train_error, learning_rate,
         shared_x, shared_y, rand_arr, vels) = compile_models(model, config)
 
-    ######################### TRAIN MODEL ################################
-
-    print '... training'
 
     if flag_para_load:
         # pass ipc handle and related information
@@ -67,6 +66,32 @@ def train_net(config):
 
         load_send_queue.put(img_mean)
 
+
+    # validation
+    load_epoch = config['load_epoch']
+    epoch = load_epoch
+    load_weights(layers, config['weights_dir'], load_epoch)
+    val_record = list(
+        np.load(config['weights_dir'] + 'val_record.npy'))
+    print "validation records", val_record
+
+    DropoutLayer.SetDropoutOff()
+    this_validation_error, this_validation_loss = get_val_error_pkl(
+        rand_arr, shared_x, shared_y, img_mean,
+        val_filenames, val_labels,
+        flag_datalayer, flag_para_load,
+        batch_size, validate_model,
+        name="test",
+        send_queue=load_send_queue, recv_queue=load_recv_queue)
+
+
+    print('epoch %i: validation loss %f ' %
+          (epoch, this_validation_loss))
+    print('epoch %i: validation error %f %%' %
+          (epoch, this_validation_error * 100.))
+    ipdb.set_trace()
+ 
+    ######################### TRAIN MODEL ################################
     n_train_batches = len(train_filenames)
     minibatch_range = range(n_train_batches)
 
@@ -88,8 +113,9 @@ def train_net(config):
                 config['weights_dir'] + 'lr_' + str(load_epoch) + '.npy')
             val_record = list(
                 np.load(config['weights_dir'] + 'val_record.npy'))
+            print "validation records", val_record
             learning_rate.set_value(lr_to_load)
-            load_momentums(vels, config['weights_dir'], load_epoch)
+            load_momentums(vels, config['weights_dir'], epoch)
 
         if flag_para_load:
             # send the initial message to load data, before each epoch
@@ -102,6 +128,7 @@ def train_net(config):
 
         count = 0
         for minibatch_index in minibatch_range:
+            break
             num_iter = (epoch - 1) * n_train_batches + count
             count = count + 1
             if count == 1:
@@ -143,7 +170,7 @@ def train_net(config):
               (epoch, this_validation_loss))
         print('epoch %i: validation error %f %%' %
               (epoch, this_validation_error * 100.))
-
+        ipdb.set_trace()
         val_record.append([this_validation_error, this_validation_loss])
         np.save(config['weights_dir'] + 'val_record.npy', val_record)
 

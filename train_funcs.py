@@ -1,6 +1,7 @@
 import glob
 import time
 import os
+import ipdb
 
 import numpy as np
 
@@ -52,10 +53,11 @@ def adjust_learning_rate(config, epoch, step_idx, val_record, learning_rate):
 
     return step_idx
 
-def get_val_error_loss(rand_arr, shared_x, shared_y, img_mean,
+def get_val_error_pkl(rand_arr, shared_x, shared_y, img_mean,
                        val_filenames, val_labels,
                        flag_datalayer, flag_para_load,
                        batch_size, validate_model,
+                       name,
                        send_queue=None, recv_queue=None,
                        flag_top_5=False):
 
@@ -64,6 +66,7 @@ def get_val_error_loss(rand_arr, shared_x, shared_y, img_mean,
 
     validation_losses = []
     validation_errors = []
+    validation_probas = []
     if flag_top_5:
         validation_errors_top_5 = []
 
@@ -78,6 +81,7 @@ def get_val_error_loss(rand_arr, shared_x, shared_y, img_mean,
         send_queue.put('calc_finished')
 
     for val_index in range(n_val_batches):
+        print val_index, n_val_batches
 
         if flag_para_load:
             # load by self or the other process
@@ -92,8 +96,8 @@ def get_val_error_loss(rand_arr, shared_x, shared_y, img_mean,
                 if not flag_datalayer:
                     send_queue.put(np.float32([0.5, 0.5, 0]))
         else:
-            val_img = pickle.load(open(str(val_filenames[val_index]))) - img_mean
-            #val_img = hkl.load(str(val_filenames[val_index]))
+            #val_img = pickle.load(open(str(val_filenames[val_index]))) #- img_mean
+            val_img = hkl.load(str(val_filenames[val_index]))
             shared_x.set_value(val_img)
 
         shared_y.set_value(val_labels[val_index * batch_size:
@@ -102,20 +106,102 @@ def get_val_error_loss(rand_arr, shared_x, shared_y, img_mean,
         if flag_top_5:
             loss, error, error_top_5 = validate_model()
         else:
-            loss, error = validate_model()
+            loss, error, proba = validate_model()
+            #loss, error = validate_model()
 
-
-        if flag_para_load and (val_index + 1 < n_val_batches):
-            send_queue.put('calc_finished')
 
         # print loss, error
         validation_losses.append(loss)
         validation_errors.append(error)
-
+        validation_probas.append(proba)
         if flag_top_5:
             validation_errors_top_5.append(error_top_5)
 
+        if flag_para_load and (val_index + 1 < n_val_batches):
+            send_queue.put('calc_finished')
+    
+    print "done! now pickling.."
+    pickle.dump(validation_probas, open(name+"_probas.pkl", "w"))
+    this_validation_loss = np.mean(validation_losses)
+    this_validation_error = np.mean(validation_errors)
+    print this_validation_error
 
+    if flag_top_5:
+        this_validation_error_top_5 = np.mean(validation_errors_top_5)
+        return this_validation_error, this_validation_error_top_5, this_validation_loss
+    else:
+        return this_validation_error, this_validation_loss
+
+
+def get_val_error_loss(rand_arr, shared_x, shared_y, img_mean,
+                       val_filenames, val_labels,
+                       flag_datalayer, flag_para_load,
+                       batch_size, validate_model,
+                       send_queue=None, recv_queue=None,
+                       flag_top_5=False):
+
+    if flag_datalayer:
+        rand_arr.set_value(np.float32([0.5, 0.5, 0]))
+
+    validation_losses = []
+    validation_errors = []
+    validation_probas = []
+    if flag_top_5:
+        validation_errors_top_5 = []
+
+    n_val_batches = len(val_filenames)
+
+    if flag_para_load:
+        # send the initial message to load data, before each epoch
+        send_queue.put(str(val_filenames[0]))
+        if not flag_datalayer:
+            send_queue.put(np.float32([0.5, 0.5, 0]))
+
+        send_queue.put('calc_finished')
+
+    for val_index in range(n_val_batches):
+        #print val_index, n_val_batches
+
+        if flag_para_load:
+            # load by self or the other process
+
+            # wait for the copying to finish
+            msg = recv_queue.get()
+            assert msg == 'copy_finished'
+
+            if val_index + 1 < n_val_batches:
+                name_to_read = str(val_filenames[val_index + 1])
+                send_queue.put(name_to_read)
+                if not flag_datalayer:
+                    send_queue.put(np.float32([0.5, 0.5, 0]))
+        else:
+            #val_img = pickle.load(open(str(val_filenames[val_index]))) #- img_mean
+            val_img = hkl.load(str(val_filenames[val_index])) - img_mean
+            shared_x.set_value(val_img)
+
+        shared_y.set_value(val_labels[val_index * batch_size:
+                                      (val_index + 1) * batch_size])
+
+        if flag_top_5:
+            loss, error, error_top_5 = validate_model()
+        else:
+            #loss, error, proba = validate_model()
+            loss, error = validate_model()
+
+
+        # print loss, error
+        validation_losses.append(loss)
+        validation_errors.append(error)
+        #validation_probas.append(proba)
+        if flag_top_5:
+            validation_errors_top_5.append(error_top_5)
+
+        if flag_para_load and (val_index + 1 < n_val_batches):
+            send_queue.put('calc_finished')
+        if val_index > 10:
+            break 
+    #print "done! now pickling.."
+    #pickle.dump(validation_probas, open("test_probas.pkl", "w"))
     this_validation_loss = np.mean(validation_losses)
     this_validation_error = np.mean(validation_errors)
 
@@ -152,8 +238,8 @@ def train_model_wrap(train_model, shared_x, shared_y, rand_arr, img_mean,
 
     else:
         #batch_img = np.random.normal(0, 1, (3, 227, 227, 256)).astype(np.float32) 
-        #batch_img = hkl.load(str(train_filenames[minibatch_index])) - img_mean
-        batch_img = pickle.load(open(str(train_filenames[minibatch_index]))) - img_mean
+        batch_img = hkl.load(str(train_filenames[minibatch_index])) - img_mean
+        #batch_img = pickle.load(open(str(train_filenames[minibatch_index]))) - img_mean
         shared_x.set_value(batch_img)
 
     batch_label = train_labels[minibatch_index * batch_size:
